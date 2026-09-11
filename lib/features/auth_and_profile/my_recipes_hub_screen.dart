@@ -401,38 +401,81 @@ Text(AppLocalizations.of(context).translate('prep_method_title'),
 const SizedBox(height: 6),
 Text(instructions, style: const TextStyle(height: 1.4, fontSize: 14)),
 // 🌟 ԻՍՊՐԱՎԼԵՆՈ: ԼՐԱՑՈՒՑԻՉ ԼՈՒՍԱՆԿԱՐՆԵՐԻ ՀՈՐԻԶՈՆԱԿԱՆ ՑՈՒՑԱԴՐՈՒՄԸ ՔԱՐՏԻ ՄԵՋ
+// 🌟 ԻՍՊՐԱՎԼԵՆՈ: ԼՐԱՑՈՒՑԻՉ ԼՈՒՍԱՆԿԱՐՆԵՐԻ ՀՈՐԻԶՈՆԱԿԱՆ ՑՈՒՑԱԴՐՈՒՄԸ + FULL-SCREEN ZOOM
 if (additionalImages.isNotEmpty) ...[
-
-const SizedBox(height: 16),
-
-Text(AppLocalizations.of(context).translate('recipe_adtnl_img_label'), 
-style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 13)),
-
-const SizedBox(height: 8),
-SizedBox(
-height: 80,
-child: ListView.builder(
-scrollDirection: Axis.horizontal,
-itemCount: additionalImages.length,
-itemBuilder: (context, imgIdx) {
-final url = additionalImages[imgIdx];
-return Padding(
-padding: const EdgeInsets.only(right: 8.0),
-child: ClipRRect(
-borderRadius: BorderRadius.circular(8),
-child: Image.network(
-url,
-width: 80,
-height: 80,
-fit: BoxFit.cover,
-errorBuilder: (c, e, s) =>  Container(width: 80, color: Colors.grey, child: Icon(Icons.broken_image, color: Colors.white)),
-),
-), 
-);
-},
-),
-),
+  const SizedBox(height: 16),
+  Text(
+    AppLocalizations.of(context).translate('recipe_adtnl_img_label'), 
+    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 13),
+  ),
+  const SizedBox(height: 8),
+  SizedBox(
+    height: 80,
+    child: ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: additionalImages.length,
+      itemBuilder: (context, imgIdx) {
+        final url = additionalImages[imgIdx];
+        
+        // 🌟 1. Оборачиваем в GestureDetector, чтобы ловить клики на миниатюры
+        return GestureDetector(
+          onTap: () {
+            // 🌟 2. МГՆՈՎԵՆԱԿԱՆ ՄՈԴԱԼ ՊԱՏՈՒՀԱՆ ПОЛНОЭКРАННОГО ПРОСМОТРА
+            showDialog(
+              context: context,
+              builder: (context) => Dialog.fullscreen(
+                backgroundColor: Colors.black, // Стильный черный фон галереи
+                child: Stack(
+                  children: [
+                    // Главный контейнер с поддержкой зума на весь экран!
+                    Center(
+                      child: InteractiveViewer(
+                        panEnabled: true,       // Позволяет двигать увеличенное фото
+                        minScale: 1.0,          // Оригинальный размер
+                        maxScale: 5.0,          // Увеличение до 5 раз!
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.contain,  // Картинка красиво впишется в экран смартфона
+                        ),
+                      ),
+                    ),
+                    // Кнопка "Закрыть" (Крестик) в верхнем углу
+                    Positioned(
+                      top: 40,
+                      right: 20,
+                      child: IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                        onPressed: () => Navigator.of(context).pop(), // Закрыть просмотр
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                url,
+                width: 80,
+                height: 80,
+                fit: BoxFit.cover,
+                errorBuilder: (c, e, s) => Container(
+                  width: 80, 
+                  color: Colors.grey, 
+                  child: const Icon(Icons.broken_image, color: Colors.white),
+                ),
+              ),
+            ), 
+          ),
+        );
+      },
+    ),
+  ),
 ],
+
 ],
 ),
 ),

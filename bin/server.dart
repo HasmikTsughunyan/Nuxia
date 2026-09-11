@@ -7,6 +7,7 @@ import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:dotenv/dotenv.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 
 
@@ -96,11 +97,11 @@ if (decoded is Map<String, dynamic>) {
 
         headers: {
           'Content-Type': 'application/json',
-          // 🌟 ՁԵՐ ԻՐԱԿԱՆ ԲԱՆԱԼԻՆ ԱՅՍՏԵՂ
+  
           'X-goog-api-key': geminiKey,
         },
         body: jsonEncode(googlePayload),
-      ).timeout(const Duration(seconds: 45));
+      ).timeout(const Duration(seconds: 90));
 
         stdout.writeln('=== СТАТУС ОТВЕТА: ${response.statusCode} ===');
   stdout.writeln('=== ТЕЛО ОТВЕТА GEMINI: ${response.body} ===');
@@ -169,6 +170,73 @@ if (decoded is Map<String, dynamic>) {
     }
   });
 
+// Добавьте обработчик OPTIONS для CORS (критично для Flutter Web!)
+
+
+router.options('/api/allergens_marker', (Request request) {
+  return Response.ok('', headers: _corsHeaders());
+});
+/*
+
+Map<String, String> _corsHeaders() => {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization',
+};
+*/
+router.post('/api/allergens_marker', (Request request) async {
+  try {
+    // 1. Читаем тело запроса
+    final String content = await request.readAsString();
+    final Map<String, dynamic> body = jsonDecode(content);
+    final String? prompt = body['prompt']?.toString();
+
+    if (prompt == null || prompt.isEmpty) {
+      return Response.badRequest(
+        body: jsonEncode({'error': 'Prompt is required for recipe transformation'}),
+        headers: _corsHeaders(),
+      );
+    }
+
+    stdout.writeln('🧠 CLOUD ENGINE: Initiating recipe adaptation via Gemini SDK...');
+
+    // 2. Инициализируем модель Gemini (используем стабильную gemini-3.6-flash)
+    final model = GenerativeModel(
+      model: 'gemini-3.6-flash',
+      apiKey: geminiKey,
+      generationConfig: GenerationConfig(
+        responseMimeType: 'application/json',
+      ),
+    );
+
+    // 3. Отправляем запрос к Gemini
+    final response = await model.generateContent([Content.text(prompt)]);
+    final String? responseText = response.text;
+
+    if (responseText == null || responseText.isEmpty) {
+      throw Exception('Gemini returned empty text');
+    }
+
+    stdout.writeln('🏆 CLOUD ENGINE: Successfully received response from Gemini.');
+
+    // 4. Возвращаем клиенту результат в поле 'result'
+    return Response.ok(
+      jsonEncode({
+        'status': 'success',
+        'result': responseText,
+      }),
+      headers: _corsHeaders(),
+    );
+  } catch (e) {
+    stderr.writeln('❌ SERVER ERROR: $e');
+    return Response.internalServerError(
+      body: jsonEncode({'error': '$e'}),
+      headers: _corsHeaders(),
+    );
+  }
+});
+
+
 
 // bin/server.dart ֆայլի ներսում՝ ROUTER-Ի ԲԱԺՆՈՒՄ
 
@@ -181,7 +249,9 @@ final dynamic requestBody = jsonDecode(payloadString);
 String recipeText = '';
 
 if (requestBody is Map<String, dynamic>) {
-  recipeText = requestBody['prompt']?.toString() ?? '';
+  recipeText = requestBody['recipeText']?.toString()
+      ?? requestBody['prompt']?.toString()
+      ?? '';
 } else if (requestBody is List && requestBody.isNotEmpty) {
   final firstItem = requestBody.first;
   if (firstItem is Map<String, dynamic>) {
@@ -189,7 +259,9 @@ if (requestBody is Map<String, dynamic>) {
   }
 }
 
-   final List<dynamic> userAllergens = requestBody['userAllergens'] ?? [];
+     final List<dynamic> userAllergens = requestBody is Map<String, dynamic>
+       ? (requestBody['userAllergens'] as List<dynamic>? ?? [])
+       : [];
 
     // 🌟 1. ԿԱԶՄՈՒՄ ԵՆՔ ԽԻՍՏ ՏԵԽՆԻԿԱԿԱՆ ՊՐՈՄԹ
     final String parsingPrompt = 
@@ -199,7 +271,11 @@ if (requestBody is Map<String, dynamic>) {
         "CRITICAL RULES:\n"
         "1. Find the exact character coordinates (start index and end index) of the matched allergen word in the ORIGINAL recipe text.\n"
         "2. The 'matched_text' must be the exact word from the recipe text.\n"
-        "3. Respond ONLY with a clean JSON array containing objects with keys: 'id', 'start', 'end', 'matched_text'. No markdown, no backticks.";
+        "3. Choose exactly one most suitable substitute for each detected allergen."
+        "4. Do not use all alternatives together."
+        "5. Produce one complete recipe only."
+        "6. Do not mention unused alternatives."
+        "7. Respond ONLY with a clean JSON array containing objects with keys: 'id', 'start', 'end', 'matched_text'. No markdown, no backticks.";
 
     // 🌟 2. ԳՈՒԳԼԻ REST PAYLOAD՝ ԽԻՍՏ JSON ՍԽԵՄԱՅՈՎ (responseSchema)
     final Map<String, dynamic> googlePayload = {
@@ -238,7 +314,7 @@ if (requestBody is Map<String, dynamic>) {
         'X-goog-api-key': geminiKey, // Ձեր աշխատող տոկենը
       },
       body: jsonEncode(googlePayload),
-    ).timeout(const Duration(seconds: 45));
+    ).timeout(const Duration(seconds: 90));
 
     stdout.writeln('=== СТАТУС ОТВЕТА: ${response.statusCode} ===');
   stdout.writeln('=== ТЕЛО ОТВЕТА GEMINI: ${response.body} ===');
@@ -296,6 +372,7 @@ if (requestBody is Map<String, dynamic>) {
       return Response.ok(
         jsonEncode({
           'status': 'success',
+          'message': rawAiText,
           'detected_allergens': finalAllergensList,
           'is_safe': finalAllergensList.isEmpty // 🌟 Եթե դատարկ է, ուրեմն ռեցեպտը 100% անվտանգ է!
         }),
@@ -331,6 +408,7 @@ if (requestBody is Map<String, dynamic>) {
   .addMiddleware(logRequests())
   .addMiddleware(corsMiddleware()) 
   .addHandler(router.call);
+  
   
   // 🌟 Միացնում ենք սերվերը 8080 պորտով
   final port = int.tryParse(env['PORT'] ?? '8080') ?? 8080;

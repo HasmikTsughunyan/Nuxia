@@ -1,6 +1,6 @@
 // core/network/network_api_controller.dart
 import 'dart:io';
-import 'dart:js_interop';
+//import 'dart:nativewrappers/_internal/vm/lib/ffi_allocation_patch.dart';
 // 🌟 ՖԱՅԼԻ ԱՄԵՆԱՎԵՐԵՎՈՒՄ ԱՎԵԼԱՑՐԵՔ ԱՅՍ IMPORT-Ը
 //import 'package:universal_html/html.dart' as html; 
 // 🌟 ՖԱՅԼԻ ԱՄԵՆԱՎԵՐԵՎՈՒՄ ԱՎԵԼԱՑՐԵՔ ԱՅՍ ՊԱՇՏՈՆԱԿԱՆ IMPORT-Ը (եթե դեռ չկա)
@@ -51,7 +51,10 @@ class NetworkApiController {
  static String currentUserLogin = ''; 
 static String currentUserAvatarUrl ='';
 static List<String> activeAllergenGroups = []; // 🌟 Ավելացրեք այս փոփոխականը ալերգենների համար
-static Map<String, String> personalizedDictionary = {}; // 🌟 Ավելացրեք այս փոփոխականը ալերգենների համար
+//static Map<String, String> personalizedDictionary = {}; // 🌟 Ավելացրեք այս փոփոխականը ալերգենների համար
+static Map<String, Map<String, List<String>>> personalizedDictionary = {};
+
+static String? responseForAiChefPage = ''; 
 
   // 🌟 Տեղադրեք ձեր Dart սերվերի իրական IP հասցեն կամ դոմեյնը
   static String get _backendUrl {
@@ -1219,7 +1222,7 @@ dev.log('uploadNewRecipeToDatabase: body_head=${response.body.substring(0, respo
       return false;
     }
   }
-
+/*
 
 // =========================================================================
 // АГЕНТ №2: ТЕХНИЧЕСКИЙ ПАРСЕР АЛЛЕРГЕНОВ (Для поиска опасных слов и выдачи JSON)
@@ -1247,13 +1250,16 @@ static Future<List<Map<String, dynamic>>> parseRecipeAllergens({
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> responseData = jsonDecode(response.body);
-      final String aiJsonResult = responseData['result'].toString().trim();
+      debugPrint('=== AI MESSAGE ===\n${responseData['message'] ?? ''}\n==================');
+      final dynamic detectedAllergens =
+          responseData['detected_allergens'] ?? responseData['result'] ?? [];
+      final List<dynamic> parsedList = detectedAllergens is List
+          ? detectedAllergens
+          : (jsonDecode(detectedAllergens.toString()) as List<dynamic>? ?? []);
 
-      debugPrint('=== AI PARSER RAW JSON ===\n$aiJsonResult\n==========================');
+      debugPrint('=== AI PARSER RAW JSON ===\n$parsedList\n==========================');
 
       // Պարսինգ ենք անում ԻԻ-ի ուղարկած մաքուր JSON զանգվածը
-      final List<dynamic> parsedList = jsonDecode(aiJsonResult);
-      
       // Վերադարձնում ենք ճիշտ տիպայնացված List<Map> ֆրոնտենդի Highlight-ի համար
       return List<Map<String, dynamic>>.from(
         parsedList.map((item) => Map<String, dynamic>.from(item as Map)),
@@ -1267,7 +1273,7 @@ static Future<List<Map<String, dynamic>>> parseRecipeAllergens({
   }
 }
 
-
+*/
   // =======================================================
   // МЕТОДЫ ДЛЯ ФИЧИ ПОИСКА ПО ИНГРЕДИЕНТАМ
   // =======================================================
@@ -1433,7 +1439,9 @@ static bool isCurrentUserAdmin() {
   return false;
 }
 
-    static Future<Map<String, String>> fetchUserActiveSubstitutesPipeline() async {
+
+static Future<Map<String, Map<String, List<String>>>>
+    fetchUserActiveSubstitutesPipeline() async {
     
  //   final Map<String, String> finalSubstitutesMap = {};
     
@@ -1488,14 +1496,13 @@ final String? userLogin = userRow['login'] as String?;
       final List<dynamic> userProfileResponse = await Supabase.instance.client
           .from('userAllergens') 
           .select('user_id, setState, allergens_group');
-         
-
+      
       if (userProfileResponse.isEmpty) {
         debugPrint('✅ PIPELINE INFO: No allergen records found.');
         return {};
       }
       
-    final List<String> activeGroupIds = [];
+    final List<int> activeGroupIds = [];
       
           for (var row in userProfileResponse) {
         final Map<String, dynamic> allergenRow = row as Map<String, dynamic>;              
@@ -1505,15 +1512,15 @@ final String? userLogin = userRow['login'] as String?;
           
           final bool isSet = allergenRow['setState'] == true || allergenRow['setState'].toString() == 'true';
           // Վերցնում ենք խմբի ID-ն որպես տեքստ կամ թիվ
-          final String currentGroup = allergenRow['allergens_group']?.toString() ?? '';
+          final int? currentGroup = int.tryParse(
+            allergenRow['allergens_group']?.toString() ?? '',
+          );
 
           // 🌟 ՈՒՂՂՈՒՄ 2: Հավաքում ենք ակտիվ խմբերը
           if (isSet) {
-            if (currentGroup == '1') activeGroupIds.add('1');
-            if (currentGroup == '2') activeGroupIds.add('2');
-            if (currentGroup == '3') activeGroupIds.add('3');
-            if (currentGroup == '4') activeGroupIds.add('4');
-            if (currentGroup == '5') activeGroupIds.add('5');
+            if (currentGroup != null && !activeGroupIds.contains(currentGroup)) {
+              activeGroupIds.add(currentGroup);
+            }
           }
         }
       }
@@ -1523,66 +1530,24 @@ final String? userLogin = userRow['login'] as String?;
         debugPrint('✅ No active allergens found for this user profile.');
         return {};
       }
-activeAllergenGroups = activeGroupIds; // 🌟 Ապահովում ենք, որ գլոբալ փոփոխականը թարմացվի
+  activeAllergenGroups = activeGroupIds.map((group) => group.toString()).toList();
 
       debugPrint('📝 PIPELINE SUCCESS: Fully assembled active group IDs: $loggedUserId, $loggedUserLogin: $activeGroupIds');
 
 
- List<String?> ingredientIds = [];
-
-
       final List<dynamic> allergens_origin = await Supabase.instance.client
           .from('allergens_original')
-          .select('id, created_at, catalog_group_id, ingredient_id');
-
-if (allergens_origin.isNotEmpty) {
-for (var row in allergens_origin) {
-          final Map<String, dynamic> allergenRow = row as Map<String, dynamic>;
-          
-          final String? groupId = allergenRow['catalog_group_id'].toString();
-          final String? ingredientId = allergenRow['ingredient_id'].toString();
-
-                     if (groupId != null && activeGroupIds.contains(groupId) && ingredientId != null) {     
-          
-            ingredientIds.add(ingredientId);
-
-            debugPrint('📝 PIPELINE INFO: Allergen origin record - Group ID: $groupId, IDs: $ingredientIds');
-          } 
-        }
-
-}
-          
-
-final List<String?> SubsIds = [];
+          .select('id, created_at, catalog_group_id, ingredient_id')
+          .inFilter('catalog_group_id', activeGroupIds);
 
       // 🌟 ՔԱՅԼ 2: Ռելյացիոն հարցում դեպի փոխարինողներ (ՈՒՂՂՎԱԾ ՃՇԳՐԻՏ ՍԻՆՏԱՔՍ)
       // Մենք փորձում ենք ճիշտ սյունակի անունը (catalog_group_id) և հստակ նշում աղյուսակի ռելյացիան
       final List<dynamic> subsResponse = await Supabase.instance.client
           .from('allergens_substitutes')
-          .select('id, catalog_group_id, substitute_ingredient_id');
-          
-
-
-      if (subsResponse.isNotEmpty) {
-        for (var row in subsResponse) {
-          final Map<String, dynamic> subsRow = row as Map<String, dynamic>;
-
-          final String? groupObj = subsRow['catalog_group_id'].toString();         
-          // Դուրս ենք բերում փոխարինողի անունը
-          final String? substituteObj = subsRow['substitute_ingredient_id'].toString();
-          
-
-          if (groupObj != null && activeGroupIds.contains(groupObj)) {
-
-            SubsIds.add(substituteObj.toString());
-           
-
-          }
-            debugPrint('📝 PIPELINE INFO: Allergen substitutes record - Group ID: $groupObj, IDs: $SubsIds');
-        }
-      }
+          .select('id, catalog_group_id, substitute_ingredient_id')
+          .inFilter('catalog_group_id', activeGroupIds);
       
-      Map<String, String> personalizedDictionary = {};
+ /*     Map<String, String> personalizedDictionary = {};
       String allergenName = '';
       String substituteName = '';
 
@@ -1597,62 +1562,136 @@ final List<String?> SubsIds = [];
           final String? ingrId = row['id']?.toString();
           final String ingrName = row['ingrname']?.toString() ?? '';
 
+          
+
 if (ingredientIds.contains(ingrId)) {
              allergenName = ingrName;
-             debugPrint('📝 PIPELINE INFO: Found allergen ingredient - ID: $ingrId, Name: $allergenName');
+          //   debugPrint('📝 PIPELINE INFO: Found allergen ingredient - ID: $ingrId, Name: $allergenName');
 }
 if (SubsIds.contains(ingrId)) {
          substituteName = ingrName;
-         debugPrint('📝 PIPELINE INFO: Found substitute ingredient - ID: $ingrId, Name: $substituteName');
+       //  debugPrint('📝 PIPELINE INFO: Found substitute ingredient - ID: $ingrId, Name: $substituteName');
 }
          
-          if (allergenName.isNotEmpty && substituteName.isNotEmpty) {
+          if (allergenName.isNotEmpty && substituteName.isNotEmpty ) {
             // Կապում ենք իրար. Օգտատիրոջ ակտիվ ալերգեն բաղադրիչը ➔ իր փոխարինողը
             personalizedDictionary[allergenName] = substituteName;
           }
         }
-      }
-debugPrint('📝 PIPELINE INFO: Personalized allergen-substitute mapping completed: $personalizedDictionary');
+        
+      }*/
 
-      debugPrint('🏆 PERSONALIZED PIPELINE COMPLETE: Mapped ${personalizedDictionary.length} active entries.');
-     
-     NetworkApiController.personalizedDictionary = personalizedDictionary; // 🌟 Ապահովում ենք, որ գլոբալ փոփոխականը թարմացվի
-     
-      return personalizedDictionary;
-     
-     //finalSubstitutesMap= personalizedDictionary; // 🌟 Ապահովում ենք, որ գլոբալ փոփոխականը թարմացվի
+final Map<String, Map<String, List<String>>> personalDictionary = {};
+
+ final List<dynamic> subsData = await Supabase.instance.client
+          .from('ingredients')
+          .select('id,ingrname');
+          
+
+// Բոլոր ingredient-ների ID -> անուն կապը
+final Map<String, String> ingredientNames = {};
+
+for (final item in subsData) {
+  final String ingredientId = item['id']?.toString() ?? '';
+  final String ingredientName =
+      item['ingrname']?.toString().trim() ?? '';
+
+  if (ingredientId.isNotEmpty && ingredientName.isNotEmpty) {
+    ingredientNames[ingredientId] = ingredientName;
+  }
+}
+
+// Ալերգեններ և փոխարինիչներ՝ միայն նույն groupId-ի ներսում
+for (final originItem in allergens_origin) {
+  final int? groupId = int.tryParse(
+    originItem['catalog_group_id']?.toString() ?? '',
+  );
+  final String allergenId =
+      originItem['ingredient_id']?.toString() ?? '';
+
+  if (groupId == null ||
+      allergenId.isEmpty ||
+      !activeGroupIds.contains(groupId)) {
+    continue;
+  }
+ 
+  final String? allergenNameAsIs = ingredientNames[allergenId];
+
+final String? allergenName = allergenNameAsIs?.toLowerCase() ?? "" ;
+
+  if (allergenName == null || allergenName.isEmpty) {
+    continue;
+  }
+
+  final List<String> substituteNames = [];
+
+  for (final substituteItem in subsResponse) {
+    final int? substituteGroupId = int.tryParse(
+      substituteItem['catalog_group_id']?.toString() ?? '',
+    );
+
+    // Խմբերի հիմնական կապը
+    if (substituteGroupId != groupId) {
+      continue;
+    }
+
+    final String substituteId =
+        substituteItem['substitute_ingredient_id']?.toString() ?? '';
+
+    final String? substituteName = ingredientNames[substituteId];
+
+    if (substituteName != null &&
+        substituteName.isNotEmpty &&
+        !substituteNames.contains(substituteName)) {
+      substituteNames.add(substituteName);
+    }
+  }
+
+  if (substituteNames.isNotEmpty) {
+    final String groupKey = groupId.toString();
+    personalDictionary[groupKey] ??= {};
+    personalDictionary[groupKey]![allergenName] = substituteNames;
+  }
+}
+
+debugPrint(
+  '📊 CLIENT ENGINE: Personalized dictionary: $personalDictionary',
+);
+
+NetworkApiController.personalizedDictionary = personalDictionary;
 
 
-    } catch (e) {
-      debugPrint('⚠️ PIPELINE FALLBACK ACTIVE: Relational chain Subsitutes failed ($e). Using secure backup.');
-      return {
-        'молоко': 'миндальное молоко',
-        'сливки': 'кокосовые сливки',
-        'сыр': 'сыр тофу',
-        'мука': 'рисовая мука',
-        'арахис': 'кешью',
-        'яйцо': 'семена чиа',
-      };
+
+return personalDictionary;
+    
+    } catch (e, stackTrace) {
+      debugPrint('⚠️ PIPELINE ERROR: $e');
+      debugPrintStack(stackTrace: stackTrace);
+      return {};
     }
   }
 
 
 
   // 🌟 Հիբրիդային ԻԻ մեթոդ. Տեղային ԻԻ + Ամպային Սերվեր
-   static Future<String> generateRecipeHybrid({
+   static Future <String> generateRecipeHybrid({
     required String prompt,
+    required List<String> userAllergens,
+    required Map<String, dynamic> responseFormat,
+
+    
   }) async {
     try {
       // 🌟 ПОДХОД ENTERPRISE: Сначала всегда стучимся на наш мощный облачный Dart-сервер
-      debugPrint('🌐 HYBRID AI: Attempting Cloud Server execution first...');
+      debugPrint('🌐 HYBRID AI: Attempting Cloud Server execution first.');
       
       // Вызываем отправку на ваш сервер с ограничением по времени (например, 12 секунд)
-      final String cloudResult = await sendToDartServer(prompt).timeout(
+      final String cloudResult = await sendToDartServer(prompt, userAllergens, responseFormat).timeout(
         const Duration(seconds: 90),
       );
 
       if (cloudResult.isNotEmpty && !cloudResult.startsWith('⚠️')) {
-        debugPrint('✅ Cloud AI Server Successful! Quality: Max');
+        debugPrint('✅ Cloud AI Server Successful! Quality: Max., result; $cloudResult');
         return cloudResult;
       }
       
@@ -1672,7 +1711,7 @@ debugPrint('📝 PIPELINE INFO: Personalized allergen-substitute mapping complet
         final response = await localModel.generateContent([
           Content.text(prompt)
         ]).timeout(const Duration(seconds: 8));
-
+ 
         if (response.text != null && response.text!.isNotEmpty) {
           debugPrint('🤖 On-Device AI Execution Successful! Cost: 0\$. Speed: High');
           return response.text!;
@@ -1686,51 +1725,159 @@ debugPrint('📝 PIPELINE INFO: Personalized allergen-substitute mapping complet
     }
   }
 
- 
-  // network_api_controller.dart ֆայլի ներսում
-
-static Future<String> sendToDartServer(String prompt) async {
+   // 🌟 ԼԻՈՎԻՆ ՆՈՐ ՔԼԻԵՆՏ ԳԵՅԹՎԵՅ: Միանում է /api/transform-recipe էնդփոինթին
+static Future<String> sendTransformRequestToCloud(String prompt) async {
   try {
-    debugPrint('🌐 Connecting to secure Cloud Dart Backend (Gateway)...');
-
-    // 🌟 ՃՇԳՐԻՏ ԷՆԴՓՈԻՆԹԸ: Ուղղորդում ենք դեպի սերվերի գլխավոր ԻԻ բաժինը
-    // 💡 Հուշում. Եթե թեստավորում եք իրական Android հեռախոսով (ոչ թե էմուլյատորով),
-    // localhost-ի փոխարեն գրեք ձեր համակարգչի տեղային IP հասցեն (օր.՝ 192.168.1.100)
-    
-    final String serverUrl = '$_backendUrl/api/parse-allergens';
+    debugPrint('🚀 CLIENT PIPELINE: Directing prompt to /api/transform-recipe...');
+    final String serverUrl = '$_backendUrl/api/transform-recipe';
 
     final response = await http.post(
       Uri.parse(serverUrl),
-      headers: {}, // Դատարկ հեդերներ՝ Chrome-ի CORS բլոկը լիովին շրջանցելու համար
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'prompt': prompt, // Ուղարկում ենք օգտատիրոջ պրոմթը սերվերին
+        'prompt': prompt,
       }),
-    ).timeout(const Duration(seconds: 45)); // Տրամադրում ենք 12 վայրկյան ժամանակ
+    ).timeout(const Duration(seconds: 90));
+
+    debugPrint('📡 CLIENT RESPONSE: Status ${response.statusCode}');
 
     if (response.statusCode == 200) {
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      final String aiTextResult = responseData['result'].toString().trim();
-      
-      debugPrint('✅ Cloud AI Response Successfully Fetched From Dart Server!');
-      return aiTextResult;
+      final Map<String, dynamic> rootData = jsonDecode(response.body);
+
+      // Читаем поле 'result' (или 'message' для совместимости)
+      final String? rawText = rootData['result']?.toString() ?? rootData['message']?.toString();
+      if (rawText == null || rawText.isEmpty) return '';
+
+      // Очищаем от возможных Markdown-тегов ```json ... ```
+      String cleanJson = rawText.replaceAll(RegExp(r'```json|```'), '').trim();
+
+      debugPrint('🏆 CLIENT PIPELINE SUCCESS: Cleaned JSON received successfully.');
+      return cleanJson;
+    } else {
+      debugPrint('❌ SERVER RETURNED ERROR STATUS: ${response.statusCode}, Body: ${response.body}');
+      return '';
     }
-
-    // Ֆեյլբեկ VIP սցենար (Fallback), եթե սերվերը սխալ տվեց
-    return _getFallbackRecipe(prompt);
-
   } catch (e) {
-    debugPrint("❌ Սխալ Dart սերվերի հետ կապ հաստատելիս: $e");
-    // Եթե ինտերնետը անջատվեց կամ սերվերը կախվեց, ակտիվանում է VIP պաշտպանությունը (Fallback)
-    return _getFallbackRecipe(prompt);
+    debugPrint('❌ CLIENT GATEWAY CRASH: $e');
+    return '';
   }
 }
 
+   // 🌟 ԼԻՈՎԻՆ ՆՈՐ ՔԼԻԵՆՏ ԳԵՅԹՎԵՅ: Միանում է /api/transform-recipe էնդփոինթին
+static Future<String> sendToCloudForAllergensMarker(String prompt) async {
+  try {
+    debugPrint('🚀 CLIENT PIPELINE: Directing prompt to /api/allergens_marker...');
+    final String serverUrl = '$_backendUrl/api/allergens_marker';
+
+    final response = await http.post(
+      Uri.parse(serverUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'prompt': prompt,
+      }),
+    ).timeout(const Duration(seconds: 90));
+
+    debugPrint('📡 CLIENT RESPONSE: Status ${response.statusCode}');
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> rootData = jsonDecode(response.body);
+
+      // Читаем поле 'result' (или 'message' для совместимости)
+      final String? rawText = rootData['result']?.toString() ?? rootData['message']?.toString();
+      if (rawText == null || rawText.isEmpty) return '';
+
+      // Очищаем от возможных Markdown-тегов ```json ... ```
+      String cleanJson = rawText.replaceAll(RegExp(r'```json|```'), '').trim();
+
+      debugPrint('🏆 CLIENT PIPELINE SUCCESS: Cleaned JSON received successfully.');
+      return cleanJson;
+    } else {
+      debugPrint('❌ SERVER RETURNED ERROR STATUS: ${response.statusCode}, Body: ${response.body}');
+      return '';
+    }
+  } catch (e) {
+    debugPrint('❌ CLIENT GATEWAY CRASH: $e');
+    return '';
+  }
+}
+
+
+  // 🌟 ENTERPRISE GATEWAY: Ուղարկում ենք պրոմթն ու օգտատիրոջ ակտիվ ալերգենները ամպային սերվերին
+  static Future<String> sendToDartServer(
+    String prompt, 
+    List<String> userAllergens, // 🌟 ՈՒՂՂՈՒՄ 1: Ալերգենները ստանում ենք որպես պատրաստի, խիստ տիպայնացված արգումենտ!
+    Map<String, dynamic>? responseFormat,
+  ) async {
+    try {
+      debugPrint('🌐 Connecting to secure Cloud Dart Backend (Gateway)...');
+      
+      final String serverUrl = '$_backendUrl/api/parse-allergens';
+
+      // 🌟 ՈՒՂՂՈՒՄ 2: Պարտադիր նշում ենք application/json, որպեսզի սերվերը ճիշտ կարդա JSON-ը
+      final response = await http.post(
+        Uri.parse(serverUrl),
+        headers: {'Content-Type': 'application/json'}, 
+        body: jsonEncode({
+          'prompt': prompt,
+          'userAllergens': userAllergens, // Փոխանցում ենք մաքուր տեքստային զանգվածը
+          'responseFormat': responseFormat ?? {},
+        }),
+      ).timeout(const Duration(seconds: 45)); // 45 վայրկյանը լիովին բավարար է արագ Gemini 3.6-ի համար
+
+      if (response.statusCode == 200) {
+        final List<dynamic>? responseDataList = jsonDecode(response.body) as List<dynamic>?;
+        
+        if (responseDataList == null || responseDataList.isEmpty) {
+          debugPrint('⚠️ Пустой ответ от սերվերի բազայի');
+          return _getFallbackRecipe(prompt);
+        }
+
+        // 🌟 ՈՒՂՂՈՒՄ 3: Ճշգրիտ Nested JSON Parsing (Վերցնում ենք ցուցակի 0-րդ տարրը, ինչպես ձեր լոգում է!)
+        final Map<String, dynamic> firstResponseNode = responseDataList[0] as Map<String, dynamic>;
+        final List<dynamic>? candidates = firstResponseNode['candidates'] as List<dynamic>?;
+
+        if (candidates == null || candidates.isEmpty) {
+          debugPrint('⚠️ Пустой ответ от GEMINI candidates');
+          return _getFallbackRecipe(prompt);
+        }
+
+        // Անվտանգ դուրս ենք բերում ԻԻ-ի գեներացրած իսկական տեքստը
+        final Map<String, dynamic> firstCandidate = candidates[0] as Map<String, dynamic>;
+        final Map<String, dynamic>? content = firstCandidate['content'] as Map<String, dynamic>?;
+        final List<dynamic>? parts = content?['parts'] as List<dynamic>?;
+        
+        final String rawText = parts != null && parts.isNotEmpty 
+            ? parts[0]['text']?.toString() ?? '' 
+            : '';
+
+        // 4. Մաքրում ենք Markdown JSON-ի ավելորդ շերտերը (```json ... ```), եթե դրանք կան
+        String cleanJsonText = rawText.replaceAll(RegExp(r'```json|```'), '').trim();
+        
+        try {
+          // Վավերացնում ենք, որ տեքստը իսկապես ճիշտ JSON է
+          final dynamic checkedJson = jsonDecode(cleanJsonText);
+          debugPrint('✅ Cloud AI response successfully fetched and validated: $checkedJson');
+          return cleanJsonText;
+        } catch (e) { 
+          debugPrint('ℹ️ Text format is standard recipe string (Not raw JSON): $e');
+          return cleanJsonText; // Վերադարձնում ենք մաքուր խոհարարական տեքստը
+        }
+      }
+      
+      return _getFallbackRecipe(prompt);
+
+    } catch (e) {
+      debugPrint("❌ Սխալ Dart սերվերի հետ կապ հաստատելիս: $e");
+      return _getFallbackRecipe(prompt);
+    }
+  }
+
 // 🌟 ՕԳՆՈՂ ՄԵԹՈԴ: Անխափան VIP սցենար (Fallback), որպեսզի հավելվածը 0% սխալ տա
 static String _getFallbackRecipe(String prompt) {
-  if (prompt.contains('Цезарь') || prompt.contains('instructions')) {
-    return "🥗 Կեսար Աղցան (Անխափան Ռեցեպտ)՝\n\nԲաղադրիչներ՝ Հավի փափկամիս, Հազարի տերևներ, Չորահացեր, Պարմեզան պանիր:\n\nՊատրաստման եղանակը՝\n1. Տապակեք հավի միսը մինչև ոսկեգույն դառնալը:\n2. Ձեռքով պատռեք հազարի տերևները:\n3. Ավելացրեք չորահացերը, հավը և Կեսար սոուսը:\n4. Վերևից քերեք Պարմեզան պանիրը: Բարի ախորժակ: ✨";
+  if (prompt.contains('title') || prompt.contains('instructions')) {
+    return "⚠️ Cloud AI Server is unavailable. Using fallback recipe generator. Please check your internet connection.";
   }
-  return "Привет! Я твой кулинарный ИИ-Шеф. Чтобы приготовить идеальный классический омлет, взбей 2 яйца с 2 столовыми ложками молока и щепоткой соли. Вылей на разогретую сливочным маслом сковороду и готовь под крышкой 3-4 минуты. 🍳";
+    return "!!!! DART SERVER is UNREACHABLE. Please try again later. In the meantime, you can manually create your recipe using the ingredients you have.";
 }
 
 }

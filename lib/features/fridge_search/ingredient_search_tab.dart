@@ -1,9 +1,11 @@
 // features/fridge_search/ingredient_search_tab.dart
 import 'package:flutter/material.dart';
+import 'package:postgres/messages.dart';
 import '../../../core/network/network_api_controller.dart';
 import '../../core/utils/ai_chef_page.dart'; // 🌟 ԱՎԵԼԱՑՎԱԾ Է. ԻԻ էջի ներմուծումը
 import '../../core/utils/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 
 
 class IngredientOption {
@@ -24,7 +26,6 @@ class IngredientSearchTab extends StatefulWidget {
 class _IngredientSearchTabState extends State<IngredientSearchTab> {
   bool _loadingIngredients = false;
   bool _searchingRecipes = false;
-  bool _generatingAiRecipe = false; // 🌟 ԱՎԵԼԱՑՎԱԾ Է. ԻԻ-ի բեռնման կարգավիճակը
   List<Map<String, dynamic>> _allIngredients = [];
   List<Map<String, dynamic>> _foundRecipes = [];
 
@@ -141,102 +142,6 @@ class _IngredientSearchTabState extends State<IngredientSearchTab> {
     }
   }
 
-  Future<void> _generateAiRecipeWithAllergens() async {
-  if (_selectedNames.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-       SnackBar(content: Text(AppLocalizations.of(context).translate('ingr_label1'))),
-    );
-    return;
-  }
-  
-  setState(() => _generatingAiRecipe = true);
-
-  try {
-    // 1. 🌟 🏆 ԲԵՐՆՈՒՄ ԵՆՔ ՕԳՏԱՏԻՐՈՋ ԱԿՏԻՎ ԱԼԵՐԳԵՆՆԵՐՆ ՈՒ ՓՈԽԱՐԻՆՈՂՆԵՐԸ ԲԱԶԱՅԻՑ
-    // Այս հարցումը վերադարձնում է, օրինակ՝ {'молоко': 'миндальное молоко', 'арахис': 'кешью'}
-    final Map<String, String> userActiveSubs = await NetworkApiController.fetchUserActiveSubstitutesPipeline();
-    
-    // 2. 🌟 ՏԵՔՍՏԱՅԻՆ ԱԼԵՐԳԵՆՆԵՐԻ ՑՈՒՑԱԿ: Վերցնում ենք Map-ի բոլոր բանալիները (Keys)
-    final List<String> textAllergensList = List<String>.from(userActiveSubs.keys);
-
-    debugPrint('📝 PIPELINE INFO: Personalized allergen-substitute mapping completed: $userActiveSubs');
-
-    final String currentLang = Localizations.localeOf(context).languageCode;
-    final String chosenIngredients = _selectedNames.join(", ");
-    
-    // 3. Ձևավորում ենք ալերգենների մաքուր տեքստը ԻԻ-ի պրոմթի համար
-    final String allergensText = textAllergensList.isNotEmpty 
-        ? textAllergensList.join(', ') 
-        : 'No allergens';
-    
-    final String hybridPrompt = 
-        "You are an expert AI Chef. Create a delicious recipe in language '$currentLang' using ONLY or mostly these ingredients: $chosenIngredients.\n"
-        "CRITICAL SECURITY REQUIREMENT: Completely exclude these user allergens from the recipe: $allergensText.\n"
-        "Provide a beautiful recipe title and step-by-step cooking instructions.";
-
-    // 4. ԳՈՐԾԱՐԿՈՒՄ ԵՆՔ ԱՆՎՏԱՆԳ ԻԻ-Ն
-    final String aiResponseRecipe = await NetworkApiController.generateRecipeHybrid(prompt: hybridPrompt);
-
-    if (mounted) {
-      // 5. 🌟 🏆 ԱՆՎՏԱՆԳ ԱՆՑՈՒՄ ԷԿՐԱՆԻՆ (0% ՏԻՊԱՅԻՆ ԿՈՆՖԼԻԿՏ)
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AiChefPage(
-            recipeTitle: AppLocalizations.of(context).translate('fridge_ingr_label'),
-            originalRecipe: aiResponseRecipe, // Փոխանցում ենք ԻԻ-ի գեներացրած մաքուր տեքստը
-            userAllergensGroups: textAllergensList, // 🌟 Փոխանցում ենք ակտիվ ալերգեն բաղադրիչների մաքուր ցուցակը հաջորդ էջին!
-          ),
-        ),
-      );
-    }
-  } catch (e) {
-    debugPrint('❌ Ошибка подготовки данных для ИИ Шефа: $e');
-  } finally {
-    if (mounted) setState(() => _generatingAiRecipe = false);
-  }
-}
-
-
-/*
-  // 🌟 ԱՎԵԼԱՑՎԱԾ Է. ԻԻ ԼՈԳԻԿԱՆ՝ ԱՌԱՆՑ ՕՐԻԳԻՆԱԼ ԿՈԴԸ ԽԱԽՏԵԼՈՒ
-  Future<void> _generateAiRecipeWithAllergens() async {
-    if (_selectedNames.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-         SnackBar(
-          content: Text(  AppLocalizations.of(context).translate('ingr_label1'), )),
-      );
-      return;
-    }
-    setState(() => _generatingAiRecipe = true);
-    try {
-      // Բեռնում ենք օգտատիրոջ ակտիվ ալերգենները բազայից
-      final Map<String, bool> dbData = await NetworkApiController.fetchUserActiveSubstitutesPipeline();
-      List<String> textAllergens = [];
-      if (dbData['group_1'] == true) textAllergens.add('сыр, молоко, лактоза');
-      if (dbData['group_2'] == true) textAllergens.add('орехи, арахис');
-      if (dbData['group_3'] == true) textAllergens.add('глютен, мука');
-      if (dbData['group_4'] == true) textAllergens.add('рыбы, морепродукты');
-      if (dbData['group_5'] == true) textAllergens.add('яйца');
-
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AiChefPage(
-              recipeTitle: AppLocalizations.of(context).translate('fridge_ingr_label'),
-              originalRecipe:  '${AppLocalizations.of(context).translate('choosed_ingr_label')} ${_selectedNames.join(", ")}.',
-              userAllergens: textAllergens,
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('Ошибка подготовки данных для ИИ Шефа: $e');
-    } finally {
-      if (mounted) setState(() => _generatingAiRecipe = false);
-    }
-  }*/
 
   @override
   Widget build(BuildContext context) {
@@ -327,19 +232,7 @@ child: _searchingRecipes
 
 const SizedBox(height:12), // Տարածություն կոճակների միջև
 // 🌟 ԱՎԵԼԱՑՎԱԾ Է. ՆՈՐ ԿՈՃԱԿ ՈՒՂԻՂ ԻԻ ՇԵՖԻՆ ԴԻՄԵԼՈՒ ՀԱՄԱՐ (ԱՌԱՆՑ ՀԻՄՔԸ ԽԱԽՏԵԼՈՒ)
-ElevatedButton.icon(
-style: ElevatedButton.styleFrom(backgroundColor: Colors.deepOrange),
 
-icon: _generatingAiRecipe
-? const SizedBox.shrink()
-: const Icon(Icons.auto_awesome, color: Colors.white),
-label: _generatingAiRecipe
-? const CircularProgressIndicator(color: Colors.white)
-:  Text(AppLocalizations.of(context).translate('rewrite_recipe_lbl'), 
-style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-
-onPressed: _generatingAiRecipe ? null : _generateAiRecipeWithAllergens,
-),
 const SizedBox(height: 12),
 
 // Результаты (ՁԵՐ ՕՐԻԳԻՆԱԼ ԼԻՍՏԸ՝ ԱՆՓՈՓՈԽ)
@@ -397,12 +290,12 @@ const SizedBox(height: 12),
               width: double.infinity,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: Colors.deepOrangeAccent,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
                 icon: const Icon(Icons.auto_awesome, color: Colors.white),
                 label: const Text(
-                  "Переписать этот рецепт через ИИ Шефа",
+                  "Найти в рецепте аллергены",
                   style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
                 

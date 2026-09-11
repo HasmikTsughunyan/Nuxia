@@ -75,7 +75,7 @@ class AiChefService {
     return {
       "title": "Безопасное блюдо из холодильника",
       "cuisine": "Домашняя кухня",
-      "instructions": "ИИ-Сервер Google сейчас перегружен. Рекомендуем обжарить выбранные продукты: ${availableIngredients.join(', ')} на сковороде с добавлением оливкового масла и специй по вкусу. Обязательно исключите: ${activeAllergens.join(', ')}.",
+      "instructions": "ИИ-Сервер Google сейчас перегружен.", 
       "source": "Резервный Модуль Dart"
     };
   }
