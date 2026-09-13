@@ -35,7 +35,8 @@ class Environment {
   static const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkcHhoZWdkcnljaWFubGViYnRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI1NDkxMTgsImV4cCI6MjA5ODEyNTExOH0.q3qFanjw7NrJJMMPYF_rYV4xnqi4wH41J84IQfSnodk';
   static const baseApiUrl = '$supabaseUrl/rest/v1';
   static const storageBaseUrl = '$supabaseUrl/storage/v1/object';
-
+//static final supabase = Supabase.instance.client;
+  
   static Map<String, String> get headers => {
         'Content-Type': 'application/json',
         'apikey': supabaseAnonKey,
@@ -43,6 +44,7 @@ class Environment {
         'Prefer': 'return=representation',
       };
 }
+
 
 class NetworkApiController {
   static String get _baseApiUrl => Environment.baseApiUrl;

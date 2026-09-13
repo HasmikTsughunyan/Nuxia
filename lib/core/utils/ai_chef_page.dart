@@ -476,7 +476,7 @@ $allergensPrompt
   }
 }
 
-Future<void> transformRecipeWithAI() async {
+Future<void> _transformRecipeWithAI() async {
   final String rcpTitle = widget.recipeTitle;
   final String rcpOriginalRecipe = widget.originalRecipe;
 
@@ -629,7 +629,7 @@ String _formatRecipeForDisplay(AdaptedRecipe recipe) {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-  onPressed: _isTransforming ? null : transformRecipeWithAi,
+  onPressed: _isTransforming ? null : _transformRecipeWithAI,
   style: ElevatedButton.styleFrom(
     backgroundColor: Colors.deepOrangeAccent, // Оранжевый цвет как на скриншоте
     foregroundColor: Colors.white,
