@@ -88,18 +88,82 @@ static String? responseForAiChefPage = '';
         final Map<String, dynamic> data = jsonDecode(response.body);
         return data['result'].toString().trim();
       }
-      return "⚠️ Ошибка сервера. Попробуйте еще раз.";
+         throw Exception('Chat server error');
     } catch (e) {
-      return "Привет! Я твой кулинарный ИИ-Шеф (Режим защиты активен). 🍳";
+      // ---- ☁️ ՍՏՈՐԱԿԵՏ 2: SUPABASE EDGE FUNCTION BACKUP ----
+      debugPrint('⚠️ [Chat Server] Offline ($e). Routing Chat to Supabase Cloud...');
+      try {
+        final response = await Supabase.instance.client.functions.invoke(
+          'gemini-chat',
+          body: {'prompt': 'Ты — опытный шеф-повар. Отвечай кратко: $userQuestion'},
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.status == 200) {
+          final Map<String, dynamic> edgeData = response.data as Map<String, dynamic>;
+          return edgeData['text']?.toString().trim() ?? 'Пустой ответ от ИИ-Чат';
+        }
+        return 'Ошибка ИИ-Чат';
+      } catch (sbError) {
+        return 'Ошибка связи с облаком ИИ: $sbError';
+      }
     }
   }
 
+  // 🌟 TIER 1/2: ԻԻ ՉԱԹԻ ԳԵՅԹՎԵՅ (AI CHEF CHAT)
+  static Future<String> askAiChatHybrid({required String prompt}) async {
+    // ---- 🏃‍♂️ ՍՏՈՐԱԿԵՏ 1: ԼՈԿԱԼ ԴԱՐՏ ՍԵՐՎԵՐ ----
+    try {
+      debugPrint('🌐 [Chat Server] Connecting to Custom Dart Backend...');
+      final response = await http.post(
+        Uri.parse('$_backendUrl/api/ai-chef'), // Չաթի անկախ լոկալ էնդփոինթը
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'prompt': prompt}),
+      ).timeout(const Duration(seconds: 6));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> rootData = jsonDecode(response.body) as Map<String, dynamic>;
+        final String? rawMessage = rootData['message']?.toString();
+        
+        if (rawMessage != null && rawMessage.isNotEmpty) {
+          final Map<String, dynamic> geminiJson = jsonDecode(rawMessage) as Map<String, dynamic>;
+          final List<dynamic>? candidates = geminiJson['candidates'] as List<dynamic>?;
+          if (candidates != null && candidates.isNotEmpty) {
+            final Map<String, dynamic> firstCandidate = candidates.first as Map<String, dynamic>;
+            final Map<String, dynamic>? content = firstCandidate['content'] as Map<String, dynamic>?;
+            final List<dynamic>? parts = content?['parts'] as List<dynamic>?;
+            if (parts != null && parts.isNotEmpty) {
+              return parts.first['text']?.toString() ?? '';
+            }
+          }
+        }
+      }
+      throw Exception('Chat server error');
+    } catch (e) {
+      // ---- ☁️ ՍՏՈՐԱԿԵՏ 2: SUPABASE EDGE FUNCTION BACKUP ----
+      debugPrint('⚠️ [Chat Server] Offline ($e). Routing Chat to Supabase Cloud...');
+      try {
+        final response = await Supabase.instance.client.functions.invoke(
+          'gemini-chat',
+          body: {'prompt': prompt},
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.status == 200) {
+          final Map<String, dynamic> edgeData = response.data as Map<String, dynamic>;
+          return edgeData['text']?.toString() ?? 'Пустой ответ от ИИ-Чат';
+        }
+        return 'Ошибка ИИ-Чат';
+      } catch (sbError) {
+        return 'Ошибка связи с облаком ИИ: $sbError';
+      }
+    }
+  }
 
 
  static Future<String> translateActiveRecipeViaAi(
   {
     required Map<String, dynamic> activeRecipe,
     required String targetLanguageCode,
+   // String finalPrompt = "Translate the following recipe fully into language code '$targetLanguageCode'. Return ONLY clean translated text:\n$fullRecipeText";
   }) 
   async {
     try {
@@ -110,7 +174,7 @@ static String? responseForAiChefPage = '';
       final String recipeInstructions = activeRecipe['instructions'] ?? activeRecipe['recipe_instructions'] ?? '';
 
       final String fullRecipeText = "Title: $recipeTitle\nIngredients: $recipeIngredients\nInstructions: $recipeInstructions";
-      final String finalPrompt = "Translate the following recipe fully into language code '$targetLanguageCode'. Return ONLY clean translated text:\n$fullRecipeText";
+      String finalPrompt = "Translate the following recipe fully into language code '$targetLanguageCode'. Return ONLY clean translated text:\n$fullRecipeText";
 
       // 🌟 ИСПРАВЛЕНО: Запрос идет строго на ваш сервер, БЕЗ ТОКЕНОВ, с таймаутом в 7 секунд!
 
@@ -130,13 +194,38 @@ static String? responseForAiChefPage = '';
         return data['result'].toString().trim();
       }
       
-      return "⚠️ Сервер вернул ошибку кода: ${response.statusCode}";
+      throw Exception('Translator server error');
+
     } catch (e) {
+
+           // ---- ☁️ ՍՏՈՐԱԿԵՏ 2: SUPABASE EDGE FUNCTION BACKUP ----
+      debugPrint('⚠️ [Translator Server] Offline ($e). Routing Translation to Supabase Cloud...');
+      try {
+
+
+      final String recipeTitle = activeRecipe['title'] ?? activeRecipe['recipe_title'] ?? '';
+      final String recipeIngredients = activeRecipe['ingredients'] ?? activeRecipe['recipe_ingredients'] ?? '';
+      final String recipeInstructions = activeRecipe['instructions'] ?? activeRecipe['recipe_instructions'] ?? '';
+
+      final String fullRecipeText = "Title: $recipeTitle\nIngredients: $recipeIngredients\nInstructions: $recipeInstructions";
+      String finalPrompt = "Translate the following recipe fully into language code '$targetLanguageCode'. Return ONLY clean translated text:\n$fullRecipeText";
+
+        final response = await Supabase.instance.client.functions.invoke(
+          'gemini-chat',
+          body: {'prompt': finalPrompt},
+        ).timeout(const Duration(seconds: 15));
+
+        if (response.status == 200) {
+          final Map<String, dynamic> edgeData = response.data as Map<String, dynamic>;
+          return edgeData['text']?.toString() ?? '';
+        }
+        return '';
+      } catch (sbError) {
       return activeRecipe['instructions'];
-      
-     
+            }
     }
   }
+    
 
 
  // network_api_controller.dart
@@ -1587,7 +1676,7 @@ return personalDictionary;
 
 
 
-// 🌟 Հիբրիդային ԻԻ մեթոդ. Տեղային ԻԻ + Ամպային Սերվեր
+/*// 🌟 Հիբրիդային ԻԻ մեթոդ. Տեղային ԻԻ + Ամպային Սերվեր
    static Future<String> generateRecipeHybrid({
 
 required String prompt,
@@ -1642,7 +1731,98 @@ debugPrint('❌ Both Cloud and On-Device AI pipelines failed: $localError');
 // Если вообще всё отключилось, отдаем заготовленный текстовый заглушка-рецепт
 return "Привет! Я ваш локальный шеф-повар. Похоже, у нас проблемы со связью с серверами ИИ, но не волнуйтесь! Из ваших ингредиентов можно приготовить отличное базовое блюдо. Просто смешайте их, добавьте специи по вкусу и обжаривайте на среднем огне 10-15 минут. 🍳";
 }
-}
+}*/
+
+  // 🌟 VIP 2-TIER PIPELINE: Локальный Dart-Сервер ➔ Облако Supabase Edge Function
+  static Future<String> generateRecipeHybrid({
+    required String prompt,
+  }) async {
+    // ---- 🏃‍♂️ СТУПЕНЬ 1: НАШ СЕРВЕР (DART SERVER.DART) ----
+    try {
+      debugPrint('🌐 HYBRID PIPELINE [Tier 1]: Contacting Custom Dart Server...');
+      
+      final String serverUrl = '$_backendUrl/api/transform-recipe';
+
+      final response = await http.post(
+        Uri.parse(serverUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'prompt': prompt}),
+      ).timeout(const Duration(seconds: 45)); // Если за 6 секунд не ответил — идем в облако
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> rootData = jsonDecode(response.body) as Map<String, dynamic>;
+        final String? rawMessage = rootData['message']?.toString();
+        
+        if (rawMessage != null && rawMessage.isNotEmpty) {
+          final Map<String, dynamic> geminiJson = jsonDecode(rawMessage) as Map<String, dynamic>;
+          final List<dynamic>? candidates = geminiJson['candidates'] as List<dynamic>?;
+          
+          if (candidates != null && candidates.isNotEmpty) {
+            final Map<String, dynamic> firstCandidate = candidates.first as Map<String, dynamic>;
+            final Map<String, dynamic>? content = firstCandidate['content'] as Map<String, dynamic>?;
+            final List<dynamic>? parts = content?['parts'] as List<dynamic>?;
+            
+            if (parts != null && parts.isNotEmpty) {
+              debugPrint('✅ [Tier 1] SUCCESS: Recipe adapted by server.dart');
+              return parts.first['text']?.toString() ?? '';
+            }
+          }
+        }
+      }
+      throw Exception('Server returned non-200 or empty data');
+      
+    } catch (serverError) {
+      // ---- ☁️ СТУПЕНЬ 2: ОБԼԱԿՈ SUPABASE (EDGE FUNCTION) ----
+      debugPrint('⚠️ [Tier 1] Offline or Timeout ($serverError). Activating [Tier 2]: Supabase Edge Function...');
+      
+      try {
+        // Вызываем функцию 'gemini-chat' через официальный встроенный SDK Supabase
+        final response = await Supabase.instance.client.functions.invoke(
+          'gemini-chat',
+          body: {'prompt': prompt},
+        ).timeout(const Duration(seconds: 20));
+
+        debugPrint('📡 [Tier 2] Supabase Cloud Response Status: ${response.status}');
+
+        if (response.status == 200) {
+          // Наша функция возвращает объект { text: "...", model: "..." }, распаковываем его напрямую!
+          final Map<String, dynamic> edgeData = response.data as Map<String, dynamic>;
+          final String? finalRecipeText = edgeData['text']?.toString() ?? edgeData['result']?.toString() ?? edgeData['message']?.toString();
+      
+          if (finalRecipeText != null && finalRecipeText.isNotEmpty) {
+            debugPrint('👑 [Tier 2] SUPABASE CLOUD SUCCESS: Edge Function saved the request!');
+            
+      
+      // Очищаем от возможных Markdown-тегов ```json ... ```
+      String cleanJson = finalRecipeText.replaceAll(RegExp(r'```json|```'), '').trim();
+
+      debugPrint('🏆 CLIENT PIPELINE SUCCESS: Cleaned JSON received successfully.');
+      return cleanJson;
+    } else {
+   
+      debugPrint('❌ SERVER RETURNED ERROR STATUS: ${response.status}, Body: ${response.data}');
+      return '';}
+    }
+     throw Exception('Server returned non-200 or empty data');
+  } catch (supabaseError) {
+    debugPrint('❌ Both Tiers failed ($supabaseError). Executing safety local fallback...');
+    return _getFallbackRecipe(prompt);
+  }
+/*
+
+            return finalRecipeText;
+          }
+        }
+        throw Exception('Supabase Edge Function returned empty response');
+        
+      } catch (supabaseError) {
+        // ---- 🤖 РЕЗЕРВНЫЙ ЗАГЛУШЕЧНЫЙ ВԱՐԻԱՆՏ ----
+        debugPrint('❌ Both Tiers failed ($supabaseError). Executing safety local fallback...');
+        return _getFallbackRecipe(prompt);*/
+      
+    }
+  }
+
 
 static Future<String> sendTransformRequestToCloud(String prompt) async {
   try {

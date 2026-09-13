@@ -497,7 +497,7 @@ Future<void> _transformRecipeWithAI() async {
 
   try {
     // 2. Формируем промпт
-    final String prompt = '''
+    final String advancedPrompt = '''
 Вы профессиональный шеф-повар и эксперт по пищевым аллергиям.
 Адаптируйте рецепт, полностью исключив указанные аллергены и подобрав для них идеальные безопасные кулинарные замены с сохранением текстуры, влажности и вкуса.
 
@@ -526,7 +526,7 @@ $allergensPrompt
 ''';
 
     // 3. Отправляем запрос на сервер через контроллер (ЕДИНСТВЕННЫЙ вызов!)
-    final String responseText = await NetworkApiController.sendTransformRequestToCloud(prompt);
+    final String responseText = await NetworkApiController.generateRecipeHybrid(prompt: advancedPrompt);
 
     if (responseText.isNotEmpty) {
       final Map<String, dynamic> data = jsonDecode(responseText);
