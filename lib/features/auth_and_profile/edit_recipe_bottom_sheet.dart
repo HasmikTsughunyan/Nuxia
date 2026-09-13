@@ -304,74 +304,7 @@ if (_additionalPhotosCtrls.length < 3)
       style: const TextStyle(color: Colors.orange),
     ),
   ),
-        
-            // 🌟 ДОБАВЛЕНО: ДИНАМИЧЕСКИЙ СПИСОК ДОПОЛНИТЕЛЬНЫХ ФОТО С КНОПКОЙ LIVE-ЗАГРУЗКИ ПО ИКОНКЕ
-  /*          ..._additionalPhotosCtrls.asMap().entries.map((entry) {
-              int idx = entry.key;
-              var ctrl = entry.value;
-              bool isIdxLoading = _uploadingAdditionalLoading[idx] ?? false;
-
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12.0),
-                child: TextFormField(
-                  controller: ctrl,
-                  decoration: InputDecoration(
-                    labelText: '${AppLocalizations.of(context).translate('adtnl_pht_lbl2')} №${idx + 1} (URL)',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.add_photo_alternate_outlined),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-
-                        isIdxLoading
-                            ? const Padding(
-                                padding: EdgeInsets.all(12.0),
-                                child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.orange, strokeWidth: 2)),
-                              )
-                            : IconButton(
-                                icon: const Icon(Icons.add_a_photo, color: Colors.orange),
-                                tooltip: AppLocalizations.of(context).translate('upld_adtnl_pht_lbl'),
-                                onPressed: () async {
-final pickedData = await ImagePickerService.pickAndCompressImage();
-if (pickedData != null) {
-setState(() => _uploadingAdditionalLoading[idx] = true);
-final String ext = pickedData.name.split('.').last.toLowerCase();
-final String uniqueName = 'recipe_edit_add${idx}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-final String? cloudUrl = await NetworkApiController.uploadImageBytes(
-bucketName: 'recipe-images',
-fileName: uniqueName,
-fileBytes: pickedData.bytes,
-);
-if (mounted) {
-setState(() {
-_uploadingAdditionalLoading[idx] = false;
-if (cloudUrl != null) {
-ctrl.text = cloudUrl; // Автоподстановка URL линка в поле!
-}
-});
-}
-}
-},
-),
-IconButton(
-icon: const Icon(Icons.delete, color: Colors.red),
-onPressed: () => setState(() => _additionalPhotosCtrls.removeAt(idx)),
-),
-],
-),
-),
-),
-);
-}),
-if (_additionalPhotosCtrls.length < 3)
-TextButton.icon(
-onPressed: _addAdditionalPhotoField,
-icon: const Icon(Icons.add_a_photo, color: Colors.orange),
-label: Text(AppLocalizations.of(context).translate('upld_adtnl_pht_lbl2'), 
-style: TextStyle(color: Colors.orange)),
-),
-*/
-
+  
 
 const SizedBox(height: 12),
 TextField(

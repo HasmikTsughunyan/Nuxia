@@ -324,7 +324,7 @@ debugPrint(
 
 
 static String geminiAnswer = '';
-
+/*
 Future<void> _transformRecipeWithAI() async {
   final String rcpTitle = widget.recipeTitle ;
   final String rcpOriginalRecipe = widget.originalRecipe ;
@@ -400,7 +400,7 @@ $allergensPrompt
     );
   }
 }
-
+*/
 
 Future<void> AllergensMarkerWithAI() async {
   final String rcpTitle = widget.recipeTitle ;
@@ -475,104 +475,80 @@ $allergensPrompt
     );
   }
 }
-/*
 
-void _transformRecipeWithAi() async {
-  setState(() => _isAiGenerating = true);
+Future<void> transformRecipeWithAI() async {
+  final String rcpTitle = widget.recipeTitle;
+  final String rcpOriginalRecipe = widget.originalRecipe;
+
+  // 1. Формируем список аллергенов строго в формате: ALLERGEN: $allergen
+  String allergensPrompt = "";
+  for (var allergen in _detectedAllergensInText) {
+    allergensPrompt += "ALLERGEN: $allergen\n";
+  }
+
+  if (allergensPrompt.trim().isEmpty) {
+    allergensPrompt = "NONE";
+  }
+
+  setState(() {
+    _isTransforming = true;
+    _transformError = null;
+  });
 
   try {
-    String strictRules = "";
-    for (var allergen in _detectedAllergensInText) {
-      final String? substitute = _globalSubstitutesDictionary[allergen];
-      if (substitute != null) {
-        strictRules += "ALLERGEN: $allergen -> SUBSTITUTE: $substitute\n";
-      }
+    // 2. Формируем промпт
+    final String prompt = '''
+Вы профессиональный шеф-повар и эксперт по пищевым аллергиям.
+Адаптируйте рецепт, полностью исключив указанные аллергены и подобрав для них идеальные безопасные кулинарные замены с сохранением текстуры, влажности и вкуса.
+
+НАЗВАНИЕ РЕЦЕПТА:
+$rcpTitle
+
+ИСХОДНЫЙ ТЕКСТ РЕЦЕПТА:
+$rcpOriginalRecipe
+
+СПИСОК АЛЛЕРГЕНОВ, КОТОРЫЕ НЕОБХОДИМО ИСКЛЮЧИТЬ И ЗАМЕНИТЬ:
+$allergensPrompt
+
+ВЕРНИТЕ РЕЗУЛЬТАТ СТРОГО В ВИДЕ JSON:
+{
+  "adaptedTitle": "Новое название с учетом замен",
+  "substitutions": [
+    {
+      "originalAllergen": "название исходного аллергена",
+      "substitute": "на что заменено и точная пропорция",
+      "reasoning": "кулинарное обоснование замены"
     }
+  ],
+  "fullAdaptedRecipeText": "Полный связный текст адаптированного рецепта с ингредиентами и инструкцией",
+  "chefTips": "Советы шефа по выпечке с этими заменами"
+}
+''';
 
-    if (strictRules.isEmpty) {
-      strictRules = "NONE";
-    }
+    // 3. Отправляем запрос на сервер через контроллер (ЕДИНСТВЕННЫЙ вызов!)
+    final String responseText = await NetworkApiController.sendTransformRequestToCloud(prompt);
 
-    final String currentLang = Localizations.localeOf(context).languageCode;
-
-
-    // Определяем JSON Schema (OpenAI / Gemini compatible format)
-    final Map<String, dynamic> jsonSchema = {
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "STRING",
-          "description": "Translated and adapted recipe title"
-        },
-        "ingredients": {
-          "type": "STRING",
-          "description": "List of all ingredients with quantities and required substitutions"
-        },
-        "instructions": {
-          "type": "STRING",
-          //"items": {"type": "STRING"},
-          "description": "Step-by-step cooking instructions"
-        },
-    /*    "chef_tips": {
-          "type": ["STRING"],
-          "description": "Optional culinary tips regarding the substitutions"
-        }*/
-      },
-      "required": ["title", "ingredients", "instructions"],
-     // "additionalProperties": false
-    };
-
-final String? rcpTitle = widget.recipeTitle;
-final String? rcpOriginalRecipe = widget.originalRecipe;
-
-
-final String advancedPrompt = """
-You are a professional Culinary AI specialized in recipe adaptation for dietary restrictions.
-Your task is to rewrite the recipe under title: $rcpTitle using the ORIGINAL recipe: $rcpOriginalRecipe as the primary source and applying the strict replacement rules:
-$strictRules.
-Replace every specified allergen strictly with its mandatory substitute.
-Do not invent unrelated ingredients.
-Translate everything (title, ingredients, instructions) to target language code: $currentLang.
-If useful, provide 1-2 chef tips specifically about cooking with these substitutions in the 'chef_tips' field. Otherwise leave it null.
-Send one recipe with changes. 
-""";
-//Put answer or the rewritten copy of recipe in $geminiAnswer .
-// ai_chef_page.dart-ի ներսում _transformRecipeWithAi() մեթոդի 3-րդ կետը.
-
-    // 3. 🌟 🏆 ԿՈՒԼՄԻՆԱՑԻԱ: Կանչում ենք ուղիղ տրանսֆորմացիայի նոր մաքուր մեթոդը!
-    final String rawJsonResponse = await NetworkApiController.sendTransformRequestToCloud(
-      advancedPrompt,
-      //responseFormat,        
-      
-    );
-
-
-    // 4. Безопасный парсинг ответа
-    final Map<String, dynamic> decodedJson = jsonDecode(rawJsonResponse);
-    final adaptedRecipe = AdaptedRecipe.fromJson(decodedJson);
-    debugPrint ('the answer from gemini is $decodedJson and  $adaptedRecipe');
-
-    if (mounted) {
+    if (responseText.isNotEmpty) {
+      final Map<String, dynamic> data = jsonDecode(responseText);
       setState(() {
-        //_isAiGenerating = false;
-        // Теперь у вас есть строго типизированный объект adaptedRecipe!
-        // Вы можете отрендерить его красивыми виджетами (ListView, Checkbox и т.д.)
-
-        _generatedResultText = _formatRecipeForDisplay(adaptedRecipe);
+        _adaptedRecipeResult = data;
+        _isTransforming = false;
       });
     } else {
-      
-      print(geminiAnswer);
-      
-      };
-
-  } catch (e) {
-    if (mounted) {
-      setState(() {
-        _isAiGenerating = false;
-        _generatedResultText = "⚠️ Ошибка трансформации: $e";
-      });
+      throw Exception("Сервер вернул пустой ответ. Проверьте консоль сервера.");
     }
+  } catch (e) {
+    setState(() {
+      _transformError = "Ошибка: $e";
+      _isTransforming = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Ошибка трансформации: $e'),
+        backgroundColor: Colors.red.shade700,
+      ),
+    );
   }
 }
 
@@ -593,7 +569,7 @@ String _formatRecipeForDisplay(AdaptedRecipe recipe) {
   }*/
   return buffer.toString();
 }
-*/
+
 
   @override
   Widget build(BuildContext context) {
@@ -653,7 +629,7 @@ String _formatRecipeForDisplay(AdaptedRecipe recipe) {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-  onPressed: _isTransforming ? null : _transformRecipeWithAI,
+  onPressed: _isTransforming ? null : transformRecipeWithAi,
   style: ElevatedButton.styleFrom(
     backgroundColor: Colors.deepOrangeAccent, // Оранжевый цвет как на скриншоте
     foregroundColor: Colors.white,

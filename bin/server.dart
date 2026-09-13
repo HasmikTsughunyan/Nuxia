@@ -170,21 +170,12 @@ if (decoded is Map<String, dynamic>) {
     }
   });
 
-// Добавьте обработчик OPTIONS для CORS (критично для Flutter Web!)
 
-
-router.options('/api/allergens_marker', (Request request) {
+router.options('/api/transform-recipe', (Request request) {
   return Response.ok('', headers: _corsHeaders());
 });
-/*
 
-Map<String, String> _corsHeaders() => {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Origin, Content-Type, Accept, Authorization',
-};
-*/
-router.post('/api/allergens_marker', (Request request) async {
+router.post('/api/transform-recipe', (Request request) async {
   try {
     // 1. Читаем тело запроса
     final String content = await request.readAsString();
@@ -200,7 +191,7 @@ router.post('/api/allergens_marker', (Request request) async {
 
     stdout.writeln('🧠 CLOUD ENGINE: Initiating recipe adaptation via Gemini SDK...');
 
-    // 2. Инициализируем модель Gemini (используем стабильную gemini-3.6-flash)
+    // 2. Инициализируем модель Gemini (используем стабильную gemini-1.5-flash)
     final model = GenerativeModel(
       model: 'gemini-3.6-flash',
       apiKey: geminiKey,

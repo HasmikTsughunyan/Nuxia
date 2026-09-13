@@ -1222,61 +1222,6 @@ dev.log('uploadNewRecipeToDatabase: body_head=${response.body.substring(0, respo
       return false;
     }
   }
-/*
-
-// =========================================================================
-// АГЕНТ №2: ТЕХНИЧЕСКИЙ ПАРСЕР АЛЛЕРГЕНОВ (Для поиска опасных слов и выдачи JSON)
-// =========================================================================
-// network_api_controller.dart ֆայլի ներսում
-
-static Future<List<Map<String, dynamic>>> parseRecipeAllergens({
-  required String recipeText,
-  required List<Map<String, dynamic>> userActiveAllergensList,
-}) async {
-  try {
-    debugPrint('=== AI PARSER PIPELINE: Requesting Allergen Coordinates from Dart Server ===');
-
-    // 🌟 ՃՇԳՐԻՏ ԷՆԴՓՈԻՆԹԸ: Ուղղորդում ենք դեպի սերվերի նոր պարսինգի բաժինը
-    final String parserUrl = '$_backendUrl/api/parse-allergens';
-
-    final response = await http.post(
-      Uri.parse(parserUrl),
-      headers: {}, // Դատարկ հեդերներ՝ Chrome-ի CORS բլոկը լիովին շրջանցելու համար
-      body: jsonEncode({
-        'recipeText': recipeText,
-        'userAllergens': userActiveAllergensList,
-      }),
-    ).timeout(const Duration(seconds: 10)); // Տրամադրում ենք 10 վայրկյան ժամանակ
-
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> responseData = jsonDecode(response.body);
-      debugPrint('=== AI MESSAGE ===\n${responseData['message'] ?? ''}\n==================');
-      final dynamic detectedAllergens =
-          responseData['detected_allergens'] ?? responseData['result'] ?? [];
-      final List<dynamic> parsedList = detectedAllergens is List
-          ? detectedAllergens
-          : (jsonDecode(detectedAllergens.toString()) as List<dynamic>? ?? []);
-
-      debugPrint('=== AI PARSER RAW JSON ===\n$parsedList\n==========================');
-
-      // Պարսինգ ենք անում ԻԻ-ի ուղարկած մաքուր JSON զանգվածը
-      // Վերադարձնում ենք ճիշտ տիպայնացված List<Map> ֆրոնտենդի Highlight-ի համար
-      return List<Map<String, dynamic>>.from(
-        parsedList.map((item) => Map<String, dynamic>.from(item as Map)),
-      );
-    }
-    
-    return [];
-  } catch (e) {
-    debugPrint("❌ Կրիտիկական սխալ ալերգենների պարսինգի մեջ: $e");
-    return []; // Սխալի դեպքում վերադարձնում է դատարկ զանգված (հավելվածը 0% կրեշ կլինի)
-  }
-}
-
-*/
-  // =======================================================
-  // МЕТОДЫ ДЛЯ ФИЧИ ПОИСКА ПО ИНГРЕДИЕНТАМ
-  // =======================================================
 
   /// 1. Загрузка глобального справочника ингредиентов
   static Future<List<Map<String, dynamic>>> fetchInitialIngredients() async {
@@ -1547,40 +1492,7 @@ final String? userLogin = userRow['login'] as String?;
           .select('id, catalog_group_id, substitute_ingredient_id')
           .inFilter('catalog_group_id', activeGroupIds);
       
- /*     Map<String, String> personalizedDictionary = {};
-      String allergenName = '';
-      String substituteName = '';
-
-      final List<dynamic> subsData = await Supabase.instance.client
-          .from('ingredients')
-          .select('id,ingrname');
-          
-
-    if (subsData.isNotEmpty) {
-        for (var row in subsData) {
-          // Օրիգինալ ալերգեն բաղադրիչի անունը (տեքստը)
-          final String? ingrId = row['id']?.toString();
-          final String ingrName = row['ingrname']?.toString() ?? '';
-
-          
-
-if (ingredientIds.contains(ingrId)) {
-             allergenName = ingrName;
-          //   debugPrint('📝 PIPELINE INFO: Found allergen ingredient - ID: $ingrId, Name: $allergenName');
-}
-if (SubsIds.contains(ingrId)) {
-         substituteName = ingrName;
-       //  debugPrint('📝 PIPELINE INFO: Found substitute ingredient - ID: $ingrId, Name: $substituteName');
-}
-         
-          if (allergenName.isNotEmpty && substituteName.isNotEmpty ) {
-            // Կապում ենք իրար. Օգտատիրոջ ակտիվ ալերգեն բաղադրիչը ➔ իր փոխարինողը
-            personalizedDictionary[allergenName] = substituteName;
-          }
-        }
-        
-      }*/
-
+ 
 final Map<String, Map<String, List<String>>> personalDictionary = {};
 
  final List<dynamic> subsData = await Supabase.instance.client
@@ -1673,59 +1585,63 @@ return personalDictionary;
 
 
 
-  // 🌟 Հիբրիդային ԻԻ մեթոդ. Տեղային ԻԻ + Ամպային Սերվեր
-   static Future <String> generateRecipeHybrid({
-    required String prompt,
+// 🌟 Հիբրիդային ԻԻ մեթոդ. Տեղային ԻԻ + Ամպային Սերվեր
+   static Future<String> generateRecipeHybrid({
+
+required String prompt,
     required List<String> userAllergens,
     required Map<String, dynamic> responseFormat,
 
     
-  }) async {
-    try {
-      // 🌟 ПОДХОД ENTERPRISE: Сначала всегда стучимся на наш мощный облачный Dart-сервер
-      debugPrint('🌐 HYBRID AI: Attempting Cloud Server execution first.');
-      
-      // Вызываем отправку на ваш сервер с ограничением по времени (например, 12 секунд)
+}) async {
+try {
+// 🌟 ПОДХОД ENTERPRISE: Сначала всегда стучимся на наш мощный облачный Dart-сервер
+      debugPrint('🌐 HYBRID AI: Attempting Cloud Server execution first...');
+
+
+// Вызываем отправку на ваш сервер с ограничением по времени (например, 12 секунд)
+    
       final String cloudResult = await sendToDartServer(prompt, userAllergens, responseFormat).timeout(
-        const Duration(seconds: 90),
-      );
+const Duration(seconds: 90),
+);
 
-      if (cloudResult.isNotEmpty && !cloudResult.startsWith('⚠️')) {
+if (cloudResult.isNotEmpty && !cloudResult.startsWith('⚠️')) {
+       
         debugPrint('✅ Cloud AI Server Successful! Quality: Max., result; $cloudResult');
-        return cloudResult;
-      }
-      
-      // Если сервер вернул пустую строку или ошибку, принудительно вызываем локальный ИИ
-      throw Exception('Cloud server returned incomplete data');
+return cloudResult;
+}
 
-    } catch (cloudError) {
-      // 🌟 ШАГ 2: FALLBACK СЦЕНАР_ИЙ. Если сервер выдал таймаут 500 или нет интернета:
-      debugPrint('⚠️ Cloud Server unavailable ($cloudError). Activating On-Device AI Fallback...');
+// Если сервер вернул пустую строку или ошибку, принудительно вызываем локальный ИИ
+throw Exception('Cloud server returned incomplete data');
 
-      try {
-        final localModel = GenerativeModel(
-          model: 'gemini-nano', 
-          apiKey: '', // Локальной модели на чипе NPU ключ не нужен
-        );
+} catch (cloudError) {
+// 🌟 ШАГ 2: FALLBACK СЦЕНАР_ИЙ. Если сервер выдал таймаут 500 или нет интернета:
+debugPrint('⚠️ Cloud Server unavailable ($cloudError). Activating On-Device AI Fallback...');
 
-        final response = await localModel.generateContent([
-          Content.text(prompt)
-        ]).timeout(const Duration(seconds: 8));
+try {
+final localModel = GenerativeModel(
+model: 'gemini-nano', 
+apiKey: '', // Локальной модели на чипе NPU ключ не нужен
+);
+
+final response = await localModel.generateContent([
+Content.text(prompt)
+]).timeout(const Duration(seconds: 8));
+
  
-        if (response.text != null && response.text!.isNotEmpty) {
-          debugPrint('🤖 On-Device AI Execution Successful! Cost: 0\$. Speed: High');
-          return response.text!;
-        }
-      } catch (localError) {
-        debugPrint('❌ Both Cloud and On-Device AI pipelines failed: $localError');
-      }
+if (response.text != null && response.text!.isNotEmpty) {
+debugPrint('🤖 On-Device AI Execution Successful! Cost: 0\$. Speed: High');
+return response.text!;
+}
+} catch (localError) {
+debugPrint('❌ Both Cloud and On-Device AI pipelines failed: $localError');
+}
 
-      // Если вообще всё отключилось, отдаем заготовленный текстовый заглушка-рецепт
-      return "Привет! Я ваш локальный шеф-повар. Похоже, у нас проблемы со связью с серверами ИИ, но не волнуйтесь! Из ваших ингредиентов можно приготовить отличное базовое блюдо. Просто смешайте их, добавьте специи по вкусу и обжаривайте на среднем огне 10-15 минут. 🍳";
-    }
-  }
+// Если вообще всё отключилось, отдаем заготовленный текстовый заглушка-рецепт
+return "Привет! Я ваш локальный шеф-повар. Похоже, у нас проблемы со связью с серверами ИИ, но не волнуйтесь! Из ваших ингредиентов можно приготовить отличное базовое блюдо. Просто смешайте их, добавьте специи по вкусу и обжаривайте на среднем огне 10-15 минут. 🍳";
+}
+}
 
-   // 🌟 ԼԻՈՎԻՆ ՆՈՐ ՔԼԻԵՆՏ ԳԵՅԹՎԵՅ: Միանում է /api/transform-recipe էնդփոինթին
 static Future<String> sendTransformRequestToCloud(String prompt) async {
   try {
     debugPrint('🚀 CLIENT PIPELINE: Directing prompt to /api/transform-recipe...');
@@ -1763,7 +1679,6 @@ static Future<String> sendTransformRequestToCloud(String prompt) async {
   }
 }
 
-   // 🌟 ԼԻՈՎԻՆ ՆՈՐ ՔԼԻԵՆՏ ԳԵՅԹՎԵՅ: Միանում է /api/transform-recipe էնդփոինթին
 static Future<String> sendToCloudForAllergensMarker(String prompt) async {
   try {
     debugPrint('🚀 CLIENT PIPELINE: Directing prompt to /api/allergens_marker...');
